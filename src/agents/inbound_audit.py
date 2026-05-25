@@ -23,16 +23,18 @@ def run(conn, settings) -> Dict:
         if price <= 0:
             continue
         margin = (price - cost) / price
-        if margin < settings.low_margin_threshold:
-            margem_baixa.append(
-                {
-                    "sku": row["sku"],
-                    "nome": row["name"],
-                    "custo_unitario": round(cost, 2),
-                    "preco": round(price, 2),
-                    "margem_pct": round(margin * 100, 1),
-                    "data_nota": row["invoice_date"],
-                }
-            )
+        entry = {
+            "sku": row["sku"],
+            "nome": row["name"],
+            "custo_unitario": round(cost, 2),
+            "preco": round(price, 2),
+            "margem_pct": round(margin * 100, 1),
+            "data_nota": row["invoice_date"],
+        }
+        if margin < 0:
+            entry["anomalia"] = "custo_maior_que_preco"
+            margem_baixa.append(entry)
+        elif margin < settings.low_margin_threshold:
+            margem_baixa.append(entry)
 
     return {"margem_baixa": margem_baixa}

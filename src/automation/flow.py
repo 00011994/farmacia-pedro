@@ -42,9 +42,13 @@ def send_whatsapp(settings, report: dict, md_path: str, json_path: str) -> dict:
         "caminho_json": os.path.abspath(json_path),
         "caminho_md": os.path.abspath(md_path),
     }
-    response = _post_json(settings.whatsapp_webhook_url, payload)
-    log_event(settings.report_dir, "whatsapp_enviado", {"http_status": response.get("status")})
-    return {"status": "enviado", "http_status": response.get("status")}
+    try:
+        response = _post_json(settings.whatsapp_webhook_url, payload)
+        log_event(settings.report_dir, "whatsapp_enviado", {"http_status": response.get("status")})
+        return {"status": "enviado", "http_status": response.get("status")}
+    except Exception as exc:
+        log_event(settings.report_dir, "whatsapp_erro", {"erro": str(exc)})
+        return {"status": "erro", "motivo": str(exc)}
 
 
 def ensure_demo_db(settings) -> None:

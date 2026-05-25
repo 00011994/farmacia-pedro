@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from dataclasses import dataclass, field
 from typing import List
 
@@ -47,6 +48,7 @@ class SessionStore:
                 try:
                     record = json.loads(line)
                 except json.JSONDecodeError:
+                    print(f"[AVISO] Linha corrompida ignorada em {path}: {line[:80]!r}", file=sys.stderr)
                     continue
                 state.messages.append(
                     ChatMessage(role=record.get("role", "user"), content=record.get("content", ""))

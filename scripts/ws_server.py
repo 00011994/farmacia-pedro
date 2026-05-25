@@ -1,49 +1,57 @@
 import asyncio
-import websockets
 import json
 import os
 from datetime import datetime
 
-# Simples WebSocket server para eventos de pedidos/carrinhos/notificações
-clients = set()
+import websockets
 
-async def notify_all(event):
-    if clients:
-        msg = json.dumps(event)
-        await asyncio.wait([client.send(msg) for client in clients])
+clients: set = set()
 
-async def event_producer():
-    # Exemplo: monitora arquivo de pedidos/notificações e envia eventos
+
+async def notify_all(event: dict) -> None:
+    if not clients:
+        return
+    msg = json.dumps(event, ensure_ascii=False)
+    await asyncio.gather(*[client.send(msg) for client in set(clients)], return_exceptions=True)
+
+
+async def event_producer() -> None:
     last_mtime = None
-    path = os.path.join('out', 'report.json')
+    path = os.path.join("out", "report.json")
     while True:
-        if os.path.exists(path):
-            mtime = os.path.getmtime(path)
-            if last_mtime is None:
-                last_mtime = mtime
-            elif mtime != last_mtime:
-                with open(path, 'r', encoding='ascii') as f:
-                    data = json.load(f)
-                await notify_all({
-                    'type': 'report_update',
-                    'timestamp': datetime.now().isoformat(),
-                    'data': data
-                })
-                last_mtime = mtime
+        try:
+            if os.path.exists(path):
+                mtime = os.path.getmtime(path)
+                if last_mtime is None:
+                    last_mtime = mtime
+                elif mtime != last_mtime:
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    await notify_all({
+                        "type": "report_update",
+                        "timestamp": datetime.now().isoformat(),
+                        "data": data,
+                    })
+                    last_mtime = mtime
+        except Exception as exc:
+            print(f"[ws_server] Erro no event_producer: {exc}")
         await asyncio.sleep(2)
 
-async def handler(websocket, path):
+
+async def handler(websocket) -> None:
     clients.add(websocket)
     try:
         async for _ in websocket:
-            pass  # Não espera mensagens do cliente
+            pass
     finally:
-        clients.remove(websocket)
+        clients.discard(websocket)
 
-async def main():
-    server = await websockets.serve(handler, '0.0.0.0', 8765)
-    await event_producer()
-    await server.wait_closed()
 
-if __name__ == '__main__':
+async def main() -> None:
+    async with websockets.serve(handler, "0.0.0.0", 8765):
+        print("WebSocket server ativo em ws://0.0.0.0:8765")
+        await event_producer()
+
+
+if __name__ == "__main__":
     asyncio.run(main())

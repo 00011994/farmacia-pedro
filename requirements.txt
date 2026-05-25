@@ -1,0 +1,5 @@
+# Runtime
+websockets>=12.0
+
+# Dev / testes
+pytest>=8.0

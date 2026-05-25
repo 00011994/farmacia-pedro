@@ -70,7 +70,8 @@ def _parse_delivery_rules(raw: str) -> List[Tuple[str, float, str]]:
 
 def _match_delivery_rule(bairro: str, rules: List[Tuple[str, float, str]]) -> Optional[Tuple[str, float, str]]:
     bairro_norm = _normalize(bairro)
-    for rule in rules:
+    sorted_rules = sorted(rules, key=lambda r: len(r[0]), reverse=True)
+    for rule in sorted_rules:
         key_norm = _normalize(rule[0])
         if key_norm and key_norm in bairro_norm:
             return rule
@@ -413,18 +414,34 @@ class AtendimentoFlow:
 
     def _log_pedido(self, data: Dict):
         import datetime
-        log_line = f"[{datetime.datetime.now()}] Pedido criado: nome={data.get('nome_cliente')}, contato_permitido={data.get('pode_contato')}, detalhes={data}"
+        import os
+        safe_nome = str(data.get("nome_cliente", "")).replace("\n", " ").replace("\r", " ")
+        safe_contato = bool(data.get("pode_contato"))
+        safe_endereco = str(data.get("endereco_parcial", "")).replace("\n", " ").replace("\r", " ")
+        log_line = (
+            f"[{datetime.datetime.now().isoformat()}] Pedido criado: "
+            f"nome={safe_nome!r} contato_permitido={safe_contato} "
+            f"endereco={safe_endereco!r}"
+        )
+        os.makedirs("out", exist_ok=True)
         with open("out/pedidos.log", "a", encoding="utf-8") as f:
             f.write(log_line + "\n")
 
+    # Mapeamento de variantes por palavra-chave no nome do produto.
+    # Adicione entradas aqui para suportar novos produtos com variantes.
+    _VARIANT_MAP = {
+        "dipirona": ["comprimido", "gotas"],
+        "amoxicilina": ["capsula 500mg", "suspensao"],
+        "vitamina c": ["comprimido", "efervescente"],
+        "ibuprofeno": ["comprimido", "suspensao"],
+        "omeprazol": ["capsula 20mg", "capsula 40mg"],
+    }
+
     def _variants_for(self, produto: ProdutoInfo) -> List[str]:
         nome = _normalize(produto.nome)
-        if "dipirona" in nome:
-            return ["comprimido", "gotas"]
-        if "amoxicilina" in nome:
-            return ["capsula 500mg", "suspensao"]
-        if "vitamina c" in nome:
-            return ["comprimido", "efervescente"]
+        for keyword, variantes in self._VARIANT_MAP.items():
+            if keyword in nome:
+                return variantes
         return []
 
     def _to_dict(self, produto: ProdutoInfo) -> Dict:

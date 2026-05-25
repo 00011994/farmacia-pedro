@@ -57,8 +57,8 @@ def _normalize(text: str) -> str:
     cleaned = text.strip().lower()
     cleaned = unicodedata.normalize("NFD", cleaned)
     cleaned = "".join(ch for ch in cleaned if unicodedata.category(ch) != "Mn")
-    cleaned = re.sub(r"[^a-z0-9\\s]", " ", cleaned)
-    cleaned = re.sub(r"\\s+", " ", cleaned)
+    cleaned = re.sub(r"[^a-z0-9\s]", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned.strip()
 
 

@@ -42,25 +42,32 @@ def build_bonus_alerts(conn, settings):
 def generate_report(settings):
     os.makedirs(settings.report_dir, exist_ok=True)
 
+    def _run_agent(name, fn, conn, cfg):
+        try:
+            return fn(conn, cfg)
+        except Exception as exc:
+            log_event(cfg.report_dir, "agente_erro", {"agente": name, "erro": str(exc)})
+            return {"erro": str(exc)}
+
     with get_conn(settings.db_path) as conn:
         generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         report = {
             "gerado_em": generated_at,
-            "operacional": run_operational(conn, settings),
-            "auditoria_entrada": run_inbound_audit(conn, settings),
-            "estrategista": run_strategist(conn, settings),
-            "estoque": run_inventory(conn, settings),
-            "executor": run_executor(conn, settings),
-            "regras": {"alertas_bonus": build_bonus_alerts(conn, settings)},
+            "operacional": _run_agent("operacional", run_operational, conn, settings),
+            "auditoria_entrada": _run_agent("auditoria_entrada", run_inbound_audit, conn, settings),
+            "estrategista": _run_agent("estrategista", run_strategist, conn, settings),
+            "estoque": _run_agent("estoque", run_inventory, conn, settings),
+            "executor": _run_agent("executor", run_executor, conn, settings),
+            "regras": {"alertas_bonus": _run_agent("bonus", build_bonus_alerts, conn, settings)},
         }
 
     json_path = os.path.join(settings.report_dir, "report.json")
     md_path = os.path.join(settings.report_dir, "report.md")
 
-    with open(json_path, "w", encoding="ascii") as handle:
-        json.dump(report, handle, indent=2, ensure_ascii=True)
+    with open(json_path, "w", encoding="utf-8") as handle:
+        json.dump(report, handle, indent=2, ensure_ascii=False)
 
-    with open(md_path, "w", encoding="ascii") as handle:
+    with open(md_path, "w", encoding="utf-8") as handle:
         handle.write(to_markdown(report))
 
     log_event(settings.report_dir, "relatorio_gerado", {"json": json_path, "md": md_path})

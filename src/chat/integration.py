@@ -63,8 +63,13 @@ def load_adapter(settings):
         if ":" not in path:
             raise ValueError("Use o formato modulo:Classe em INTEGRATION_ADAPTER_PATH")
         module_name, class_name = path.split(":", 1)
-        module = importlib.import_module(module_name)
-        klass = getattr(module, class_name)
+        try:
+            module = importlib.import_module(module_name)
+            klass = getattr(module, class_name)
+        except ImportError as exc:
+            raise ValueError(f"Modulo '{module_name}' nao encontrado: {exc}") from exc
+        except AttributeError as exc:
+            raise ValueError(f"Classe '{class_name}' nao encontrada em '{module_name}': {exc}") from exc
         return klass(settings)
 
     return LocalAdapter(settings.report_dir)

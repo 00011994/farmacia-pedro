@@ -22,9 +22,10 @@ def run(conn, settings) -> Dict:
                 days_no_sales = settings.days_no_sales + 1
                 last_sale_str = "nunca"
             else:
-                last_sale_date = datetime.strptime(last_sale, "%Y-%m-%d").date()
+                last_sale_clean = last_sale.split("T")[0].split(" ")[0]
+                last_sale_date = datetime.strptime(last_sale_clean, "%Y-%m-%d").date()
                 days_no_sales = (today - last_sale_date).days
-                last_sale_str = last_sale
+                last_sale_str = last_sale_clean
 
             if days_no_sales > settings.days_no_sales:
                 estoque_parado.append(
