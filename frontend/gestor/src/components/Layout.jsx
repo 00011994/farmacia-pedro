@@ -38,14 +38,9 @@ export default function Layout() {
   const Sidebar = ({ mobile }) => (
     <aside className={`${mobile ? 'w-64' : 'w-60 hidden lg:flex'} flex-col bg-white border-r border-gray-100 h-full`}>
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-100">
-        <div className="w-9 h-9 bg-primary-600 rounded-xl flex items-center justify-center">
-          <span className="text-white font-black text-sm">D</span>
-        </div>
-        <div>
-          <p className="font-black text-primary-600 text-base leading-none">Drogarias Max</p>
-          <p className="text-xs text-gray-400 font-medium">Painel Gerencial</p>
-        </div>
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
+        <img src="/logo.png" alt="Drogarias Max" className="h-9 w-auto" />
+        <p className="text-xs text-gray-400 font-medium">Painel Gerencial</p>
         {mobile && (
           <button onClick={() => setSidebarOpen(false)} className="ml-auto text-gray-400 hover:text-gray-600">
             <X size={18} />

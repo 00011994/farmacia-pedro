@@ -30,13 +30,10 @@ export default function Login() {
       {/* Left panel */}
       <div className="hidden lg:flex flex-col justify-between w-1/2 bg-gradient-to-br from-primary-600 to-primary-900 p-12 text-white">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-            <Pill size={22} className="text-white" />
+          <div className="bg-white rounded-xl p-2">
+            <img src="/logo.png" alt="Drogarias Max" className="h-8 w-auto" />
           </div>
-          <div>
-            <p className="font-black text-xl leading-none">Drogarias Max</p>
-            <p className="text-primary-200 text-xs">Painel Gerencial</p>
-          </div>
+          <p className="text-primary-200 text-sm font-medium">Painel Gerencial</p>
         </div>
         <div>
           <h2 className="text-4xl font-black leading-tight mb-4">
@@ -65,14 +62,9 @@ export default function Login() {
       <div className="flex-1 flex items-center justify-center p-6 bg-gray-50">
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
-          <div className="flex items-center gap-2 mb-8 lg:hidden justify-center">
-            <div className="w-9 h-9 bg-primary-600 rounded-xl flex items-center justify-center">
-              <span className="text-white font-black text-sm">D</span>
-            </div>
-            <div>
-              <p className="font-black text-primary-600 text-lg leading-none">Drogarias Max</p>
-              <p className="text-gray-400 text-xs">Painel Gerencial</p>
-            </div>
+          <div className="flex flex-col items-center gap-1 mb-8 lg:hidden">
+            <img src="/logo.png" alt="Drogarias Max" className="h-10 w-auto" />
+            <p className="text-gray-400 text-xs">Painel Gerencial</p>
           </div>
 
           <div className="card p-8">
