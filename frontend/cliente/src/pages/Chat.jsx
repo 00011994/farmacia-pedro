@@ -55,14 +55,11 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  const handleSend = async () => {
-    const text = input.trim()
+  const sendText = async (text) => {
     if (!text || loading) return
-
     setInput('')
     setMessages(prev => [...prev, { role: 'user', content: text }])
     setLoading(true)
-
     try {
       const res = await sendMessage(sessionId, text, isLoggedIn ? customer?.id : null)
       setMessages(prev => [...prev, { role: 'assistant', content: res.data.reply }])
@@ -76,6 +73,8 @@ export default function Chat() {
       setTimeout(() => inputRef.current?.focus(), 100)
     }
   }
+
+  const handleSend = () => sendText(input.trim())
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -166,7 +165,7 @@ export default function Chat() {
             {quickReplies.map(q => (
               <button
                 key={q}
-                onClick={() => { setInput(q); setTimeout(handleSend, 0) }}
+                onClick={() => sendText(q)}
                 className="shrink-0 text-xs bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 px-3 py-1.5 rounded-full transition-colors whitespace-nowrap"
               >
                 {q}

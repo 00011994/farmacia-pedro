@@ -255,7 +255,10 @@ def assign_order(driver_id: int, order_id: int, body: AssignIn, staff=Depends(re
         if driver["status"] not in ("available",):
             raise HTTPException(409, f"Entregador está '{driver['status']}', não disponível")
 
-        order = conn.execute("SELECT id FROM orders WHERE id = ?", (order_id,)).fetchone()
+        order = (
+            conn.execute("SELECT id FROM orders WHERE id = ?", (order_id,)).fetchone()
+            or conn.execute("SELECT id FROM customer_orders WHERE id = ?", (order_id,)).fetchone()
+        )
         if not order:
             raise HTTPException(404, "Pedido não encontrado")
 

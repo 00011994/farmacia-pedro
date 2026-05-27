@@ -40,9 +40,7 @@ def trigger_report(
     if user["role"] != "gestor":
         raise HTTPException(status_code=403, detail="Apenas gestores podem gerar relatorios manualmente")
     try:
-        from src.core.db import get_conn
-        with get_conn(settings.db_path) as conn:
-            generate_report(conn, settings)
+        generate_report(settings)
         return {"ok": True, "message": "Relatorio gerado com sucesso", "timestamp": datetime.now(timezone.utc).isoformat()}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar relatorio: {exc}")

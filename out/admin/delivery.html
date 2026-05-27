@@ -299,14 +299,24 @@ function populateDriverSelect(available) {
 // ── Load orders (pending) ─────────────────────────────────────────────────────
 async function loadOrders() {
   try {
-    const res = await fetch(`${MAIN_API}/api/orders`, { headers: AUTH });
-    if (!res.ok) return;
-    const data = await res.json();
-    const pending = (data.items || data).filter(o => ['pendente','processando','enviado'].includes(o.status));
+    // Load both chat orders and ERP orders, merge and show pending ones
+    const [chatRes, erpRes] = await Promise.all([
+      fetch(`${MAIN_API}/api/orders`, { headers: AUTH }),
+      fetch(`${MAIN_API}/api/orders/erp`, { headers: AUTH }),
+    ]);
+    const chatOrders = chatRes.ok ? (await chatRes.json()) : [];
+    const erpOrders  = erpRes.ok  ? (await erpRes.json())  : [];
+    // Normalize customer name field
+    const normalize = (o, src) => ({ ...o, _customerLabel: o.customer_name || o.customer || '—', _src: src });
+    const allOrders = [
+      ...chatOrders.map(o => normalize(o, 'chat')),
+      ...erpOrders.map(o => normalize(o, 'erp')),
+    ];
+    const pending = allOrders.filter(o => ['pendente','processando','enviado','confirmado','em_preparo','pronto'].includes(o.status));
     renderOrderSidebar(pending);
     const sel = document.getElementById('sel-order');
     sel.innerHTML = '<option value="">Pedido...</option>' +
-      pending.map(o => `<option value="${o.id}">#${o.id} — ${o.customer}</option>`).join('');
+      pending.map(o => `<option value="${o.id}">#${o.id} — ${o._customerLabel} (${o._src})</option>`).join('');
   } catch(e) {}
 }
 
@@ -315,7 +325,7 @@ function renderOrderSidebar(orders) {
   if (!orders.length) { el.innerHTML = '<div style="padding:20px;color:#aaa;font-size:12px;text-align:center">Nenhum pedido pendente</div>'; return; }
   el.innerHTML = orders.map(o =>
     `<div class="order-row">
-      <h4>#${o.id} — ${o.customer}</h4>
+      <h4>#${o.id} — ${o._customerLabel}</h4>
       <p>${o.status} · R$ ${(o.total||0).toFixed(2)}</p>
     </div>`).join('');
 }
