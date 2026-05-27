@@ -189,7 +189,18 @@ async function loadAssignment() {
     const res = await fetch(`${API}/api/drivers/${session.driverId}/status`, authHeaders());
     const data = await res.json();
     if (data.status === 'on_route') {
-      // Find active assignment
+      // Fetch active assignment to get orderId
+      try {
+        const aRes = await fetch(`${API}/driver/active-assignment`, authHeaders());
+        if (aRes.ok) {
+          const aData = await aRes.json();
+          if (aData.order_id) {
+            session.orderId = aData.order_id;
+            session.orderAddr = aData.customer_name ? `Pedido de ${aData.customer_name}` : '';
+            sessionStorage.setItem('driver_session', JSON.stringify(session));
+          }
+        }
+      } catch(_) {}
       await showDeliveryScreen();
     } else {
       showWaitingScreen(data.status);

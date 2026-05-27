@@ -95,7 +95,9 @@ const STEPS = [
 ];
 
 const params  = new URLSearchParams(location.search);
-const orderId = location.pathname.split('/').filter(Boolean).pop();
+// Works for both /t/1?token=xxx and /track/1/page?token=xxx
+const _segments = location.pathname.split('/').filter(Boolean);
+const orderId = params.get('order_id') || _segments[1] || _segments[0];
 const token   = params.get('token') || '';
 const apiBase = `${location.protocol}//${location.hostname}:8001`;
 const wsBase  = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:8001`;

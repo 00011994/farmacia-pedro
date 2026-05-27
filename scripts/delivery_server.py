@@ -60,9 +60,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static files from out/
-os.makedirs("out", exist_ok=True)
+# Serve static files
+os.makedirs("out/uploads/drivers", exist_ok=True)
+os.makedirs("out/track", exist_ok=True)
+os.makedirs("out/driver", exist_ok=True)
+os.makedirs("out/admin", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="out/uploads"), name="uploads")
+
+
+@app.on_event("startup")
+def _load_settings_from_db():
+    """Sync tracker in-memory settings from DB on startup."""
+    try:
+        s = _get_settings_from_db()
+        tracker.settings.avg_speed_kmh = float(s.get("avg_speed_kmh", "30"))
+        tracker.settings.stopped_alert_min = int(s.get("stopped_alert_min", "5"))
+    except Exception:
+        pass
 
 
 # ── Auth dependencies ─────────────────────────────────────────────────────────
@@ -253,9 +267,7 @@ def assign_order(driver_id: int, order_id: int, body: AssignIn, staff=Depends(re
             raise HTTPException(409, "Pedido já possui entrega ativa")
 
         avg_speed = _get_avg_speed()
-        eta = None
-        if body.dest_lat and body.dest_lon:
-            _, eta = calc_eta(body.dest_lat, body.dest_lon, body.dest_lat, body.dest_lon, avg_speed)
+        eta = None  # will be calculated on first GPS update from driver
 
         token = generate_tracking_token()
         alert_min = body.stopped_alert_min or _get_stopped_alert_min()
@@ -313,13 +325,43 @@ def get_tracking_state(order_id: int, token: str):
     }
 
 
-# Serve the tracking SPA
-@app.get("/track/{order_id}/page")
+# Serve the tracking SPA — served at /t/{order_id} to avoid collision with JSON API
+@app.get("/t/{order_id}")
 def tracking_page(order_id: int):
     return FileResponse("out/track/index.html")
 
 
+# Serve driver app
+@app.get("/driver-app")
+def driver_app_page():
+    return FileResponse("out/driver/index.html")
+
+
+# Serve admin delivery panel
+@app.get("/admin/delivery")
+def admin_delivery_page():
+    return FileResponse("out/admin/delivery.html")
+
+
 # ── Driver app endpoints ──────────────────────────────────────────────────────
+
+@app.get("/driver/active-assignment")
+def get_active_assignment(driver_id: int = Depends(require_driver())):
+    """Returns the current active assignment for the authenticated driver."""
+    with get_conn(DB_PATH) as conn:
+        row = conn.execute(
+            """SELECT da.order_id, da.status, da.dest_lat, da.dest_lon, da.eta_minutes,
+                      o.customer as customer_name
+               FROM delivery_assignments da
+               LEFT JOIN orders o ON o.id = da.order_id
+               WHERE da.driver_id = ? AND da.status IN ('assigned','in_progress')
+               ORDER BY da.assigned_at DESC LIMIT 1""",
+            (driver_id,),
+        ).fetchone()
+    if not row:
+        return {"order_id": None}
+    return dict(row)
+
 
 @app.post("/driver/login")
 def driver_login(body: DriverLoginIn):
@@ -343,7 +385,7 @@ async def update_location(body: LocationIn, driver_id: int = Depends(require_dri
             """SELECT da.*, d.name as driver_name, d.photo_path
                FROM delivery_assignments da
                JOIN drivers d ON d.id = da.driver_id
-               WHERE da.driver_id = ? AND da.status = 'in_progress'""",
+               WHERE da.driver_id = ? AND da.status IN ('assigned', 'in_progress')""",
             (driver_id,),
         ).fetchone()
 
@@ -366,7 +408,7 @@ async def update_location(body: LocationIn, driver_id: int = Depends(require_dri
         )
 
         # Update assignment to in_progress if still assigned
-        if assignment and assignment["status"] == "assigned":
+        if assignment and dict(assignment)["status"] == "assigned":
             conn.execute(
                 "UPDATE delivery_assignments SET status = 'in_progress', started_at = ? WHERE id = ?",
                 (datetime.now(timezone.utc).isoformat(), assignment["id"]),
@@ -390,7 +432,7 @@ async def update_location(body: LocationIn, driver_id: int = Depends(require_dri
 async def complete_delivery(order_id: int, driver_id: int = Depends(require_driver())):
     with get_conn(DB_PATH) as conn:
         assignment = conn.execute(
-            "SELECT id, driver_id FROM delivery_assignments WHERE order_id = ? AND driver_id = ? AND status = 'in_progress'",
+            "SELECT id, driver_id FROM delivery_assignments WHERE order_id = ? AND driver_id = ? AND status IN ('assigned','in_progress')",
             (order_id, driver_id),
         ).fetchone()
         if not assignment:

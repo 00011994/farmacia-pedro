@@ -85,6 +85,18 @@
     /* Toast */
     .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#323232;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9998}
     .toast.show{opacity:1}
+
+    /* Login overlay */
+    .login-overlay{position:fixed;inset:0;background:#0033A0;display:flex;align-items:center;justify-content:center;z-index:99999}
+    .login-overlay.hidden{display:none}
+    .login-box{background:#fff;border-radius:16px;padding:32px 28px;width:320px;text-align:center}
+    .login-box h2{font-size:18px;font-weight:700;margin-bottom:4px;color:#0033A0}
+    .login-box p{font-size:12px;color:#888;margin-bottom:20px}
+    .login-box input{width:100%;border:1px solid #ddd;border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:10px;outline:none}
+    .login-box input:focus{border-color:#0033A0}
+    .login-box button{width:100%;background:#0033A0;color:#fff;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:700;cursor:pointer}
+    .login-box .login-error{color:#dc3545;font-size:12px;margin-bottom:8px;display:none}
+    .login-box .login-error.show{display:block}
   </style>
 </head>
 <body>
@@ -159,14 +171,25 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Login overlay -->
+<div class="login-overlay" id="login-overlay">
+  <div class="login-box">
+    <h2>Central de Entregas</h2>
+    <p>Drogarias Max — acesso da equipe</p>
+    <div class="login-error" id="login-error">Usuário ou senha inválidos.</div>
+    <input type="text" id="login-user" placeholder="Usuário" autocomplete="username">
+    <input type="password" id="login-pass" placeholder="Senha" autocomplete="current-password">
+    <button onclick="doAdminLogin()">Entrar</button>
+  </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const API    = `${location.protocol}//${location.hostname}:8001`;
-const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:8001`;
-const TOKEN  = sessionStorage.getItem('staff_token') || prompt('Token JWT (gestor/funcionário):') || '';
-if (TOKEN) sessionStorage.setItem('staff_token', TOKEN);
-
-const AUTH = { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' };
+const API      = `${location.protocol}//${location.hostname}:8001`;
+const MAIN_API = `${location.protocol}//${location.hostname}:8080`;
+const WS_URL   = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:8001`;
+let TOKEN = sessionStorage.getItem('staff_token') || '';
+let AUTH  = { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' };
 
 let map, drivers = {}, markers = {}, wsConnections = {};
 let selectedDriverId = null;
@@ -176,6 +199,36 @@ map = L.map('map', { zoomControl: true }).setView([-22.9068, -43.1729], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '© OpenStreetMap'
 }).addTo(map);
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+async function doAdminLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value.trim();
+  const errEl = document.getElementById('login-error');
+  if (!user || !pass) { errEl.classList.add('show'); errEl.textContent = 'Preencha usuário e senha.'; return; }
+  try {
+    const res = await fetch(`${MAIN_API}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: user, password: pass }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.classList.add('show'); errEl.textContent = data.detail || 'Credenciais inválidas.'; return; }
+    TOKEN = data.access_token;
+    AUTH = { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' };
+    sessionStorage.setItem('staff_token', TOKEN);
+    document.getElementById('login-overlay').classList.add('hidden');
+    errEl.classList.remove('show');
+    initDashboard();
+  } catch(e) { errEl.classList.add('show'); errEl.textContent = 'Erro de conexão.'; }
+}
+
+function initDashboard() {
+  loadDrivers();
+  loadOrders();
+  loadSettings();
+  setInterval(loadDrivers, 30000);
+}
 
 // ── Load drivers ──────────────────────────────────────────────────────────────
 async function loadDrivers() {
@@ -246,7 +299,7 @@ function populateDriverSelect(available) {
 // ── Load orders (pending) ─────────────────────────────────────────────────────
 async function loadOrders() {
   try {
-    const res = await fetch(`${API.replace(':8001','')}/api/orders`, { headers: AUTH });
+    const res = await fetch(`${MAIN_API}/api/orders`, { headers: AUTH });
     if (!res.ok) return;
     const data = await res.json();
     const pending = (data.items || data).filter(o => ['pendente','processando','enviado'].includes(o.status));
@@ -421,10 +474,16 @@ function showToast(msg) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
-loadDrivers();
-loadOrders();
-loadSettings();
-setInterval(loadDrivers, 30000);
+if (TOKEN) {
+  document.getElementById('login-overlay').classList.add('hidden');
+  initDashboard();
+}
+// Enter key support on login form
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !document.getElementById('login-overlay').classList.contains('hidden')) {
+    doAdminLogin();
+  }
+});
 </script>
 </body>
 </html>
