@@ -9,7 +9,12 @@ DB_PATH = os.path.join("data", "erp_demo.db")
 def reset_schema(conn):
     conn.executescript(
         """
+        DROP TABLE IF EXISTS delivery_assignments;
+        DROP TABLE IF EXISTS driver_locations;
+        DROP TABLE IF EXISTS drivers;
+        DROP TABLE IF EXISTS delivery_settings;
         DROP TABLE IF EXISTS customer_orders;
+        DROP TABLE IF EXISTS customers;
         DROP TABLE IF EXISTS users;
         DROP TABLE IF EXISTS order_items;
         DROP TABLE IF EXISTS orders;
@@ -96,6 +101,44 @@ def reset_schema(conn):
             notes TEXT DEFAULT '',
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE drivers (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL,
+            pin_hash    TEXT NOT NULL,
+            photo_path  TEXT,
+            status      TEXT NOT NULL DEFAULT 'available',
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE driver_locations (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            driver_id   INTEGER NOT NULL REFERENCES drivers(id),
+            order_id    INTEGER,
+            lat         REAL NOT NULL,
+            lon         REAL NOT NULL,
+            recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE delivery_assignments (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            driver_id         INTEGER NOT NULL REFERENCES drivers(id),
+            order_id          INTEGER NOT NULL REFERENCES orders(id),
+            status            TEXT NOT NULL DEFAULT 'assigned',
+            tracking_token    TEXT NOT NULL UNIQUE,
+            eta_minutes       INTEGER,
+            dest_lat          REAL,
+            dest_lon          REAL,
+            assigned_at       TEXT NOT NULL DEFAULT (datetime('now')),
+            started_at        TEXT,
+            completed_at      TEXT,
+            stopped_alert_min INTEGER NOT NULL DEFAULT 5
+        );
+
+        CREATE TABLE delivery_settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
         );
 
         CREATE TABLE customers (
@@ -239,6 +282,12 @@ def seed_data(conn):
             delivery_address, taxa_entrega, status, total, notes, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         customer_order_rows,
+    )
+
+    # Delivery settings defaults
+    conn.executemany(
+        "INSERT INTO delivery_settings (key, value) VALUES (?, ?)",
+        [("avg_speed_kmh", "30"), ("stopped_alert_min", "5")],
     )
 
     # Demo customers

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Acompanhe seu pedido — Drogarias Max</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',sans-serif;background:#f5f5f5;color:#222;min-height:100vh}
+
+    .header{background:#0033A0;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between}
+    .header h1{font-size:15px;font-weight:700}
+    .header .order-num{font-size:12px;opacity:.75}
+
+    .status-card{background:#fff;margin:12px;border-radius:12px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.08)}
+
+    /* Timeline */
+    .timeline{display:flex;flex-direction:column;gap:0}
+    .tl-item{display:flex;gap:12px;align-items:flex-start;padding:8px 0}
+    .tl-line{display:flex;flex-direction:column;align-items:center;width:20px;flex-shrink:0}
+    .tl-dot{width:16px;height:16px;border-radius:50%;border:2px solid #ccc;background:#fff;flex-shrink:0;transition:all .3s}
+    .tl-dot.done{background:#28a745;border-color:#28a745}
+    .tl-dot.active{background:#0033A0;border-color:#0033A0;box-shadow:0 0 0 3px rgba(0,51,160,.2);animation:pulse 1.5s infinite}
+    .tl-connector{width:2px;flex:1;min-height:20px;background:#eee;transition:background .3s}
+    .tl-connector.done{background:#28a745}
+    .tl-body{flex:1;padding-bottom:4px}
+    .tl-label{font-size:13px;font-weight:600;color:#444;transition:color .3s}
+    .tl-label.done{color:#28a745}
+    .tl-label.active{color:#0033A0}
+    .tl-time{font-size:11px;color:#999;margin-top:1px}
+    .driver-info{display:flex;align-items:center;gap:8px;margin-top:6px;background:#f0f4ff;border-radius:8px;padding:8px}
+    .driver-avatar{width:36px;height:36px;border-radius:50%;object-fit:cover;background:#0033A0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;flex-shrink:0}
+    .driver-name{font-size:12px;font-weight:600}
+    .driver-eta{font-size:11px;color:#666;margin-top:1px}
+
+    /* Map */
+    .map-card{background:#fff;margin:0 12px 12px;border-radius:12px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.08)}
+    #map{height:220px;width:100%}
+    .map-label{padding:8px 12px;font-size:11px;color:#888;border-top:1px solid #f0f0f0}
+
+    /* Delivered screen */
+    .delivered-screen{text-align:center;padding:32px 16px}
+    .delivered-screen .icon{font-size:64px;margin-bottom:12px}
+    .delivered-screen h2{font-size:18px;color:#28a745;font-weight:700}
+    .delivered-screen p{font-size:13px;color:#666;margin-top:6px}
+
+    /* Notification banner */
+    .notif-banner{background:#FFD200;color:#000;text-align:center;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;display:none}
+    .notif-banner.show{display:block}
+
+    /* Connection indicator */
+    .conn-dot{width:7px;height:7px;border-radius:50%;background:#28a745;display:inline-block;margin-right:4px}
+    .conn-dot.offline{background:#dc3545}
+
+    @keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(0,51,160,.2)}50%{box-shadow:0 0 0 6px rgba(0,51,160,.05)}}
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Drogarias Max</h1>
+    <div class="order-num" id="order-num">Carregando pedido...</div>
+  </div>
+  <div style="text-align:right;font-size:11px">
+    <span class="conn-dot" id="conn-dot"></span><span id="conn-status">Conectando...</span>
+  </div>
+</div>
+
+<div class="notif-banner" id="notif-banner" onclick="requestNotifPermission()">
+  🔔 Ativar notificações para acompanhar sua entrega
+</div>
+
+<div id="main-content">
+  <div class="status-card">
+    <div class="timeline" id="timeline">
+      <!-- Steps rendered by JS -->
+    </div>
+  </div>
+
+  <div class="map-card" id="map-card" style="display:none">
+    <div id="map"></div>
+    <div class="map-label">📍 Posição em tempo real do entregador</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const STEPS = [
+  { key: 'confirmed',        label: 'Pedido confirmado' },
+  { key: 'preparing',        label: 'Em separação' },
+  { key: 'out_for_delivery', label: 'Saiu para entrega' },
+  { key: 'delivered',        label: 'Entregue' },
+];
+
+const params  = new URLSearchParams(location.search);
+const orderId = location.pathname.split('/').filter(Boolean).pop();
+const token   = params.get('token') || '';
+const apiBase = `${location.protocol}//${location.hostname}:8001`;
+const wsBase  = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:8001`;
+
+let map = null, driverMarker = null, destMarker = null;
+let state = { status: 'confirmed', driver_name: null, driver_photo: null, eta_minutes: null, lat: null, lon: null, dest_lat: null, dest_lon: null };
+let ws = null, wsReconnectDelay = 1000;
+
+// ── Initial load ─────────────────────────────────────────────────────────────
+async function loadInitialState() {
+  try {
+    const res = await fetch(`${apiBase}/track/${orderId}?token=${token}`);
+    if (!res.ok) { showError(); return; }
+    const data = await res.json();
+    document.getElementById('order-num').textContent = `Pedido #${data.order_id}`;
+    applyState({
+      status: data.status,
+      driver_name: data.driver_name,
+      driver_photo: data.driver_photo,
+      eta_minutes: data.eta_minutes,
+      lat: data.lat,
+      lon: data.lon,
+      dest_lat: data.dest_lat,
+      dest_lon: data.dest_lon,
+    });
+    connectWS();
+    askNotifPermission();
+  } catch(e) {
+    showError();
+  }
+}
+
+// ── State & render ────────────────────────────────────────────────────────────
+function applyState(patch) {
+  Object.assign(state, patch);
+  renderTimeline();
+  renderMap();
+}
+
+function renderTimeline() {
+  const tl = document.getElementById('timeline');
+  const currentIdx = STEPS.findIndex(s => s.key === state.status);
+  let html = '';
+  STEPS.forEach((step, i) => {
+    const done   = i < currentIdx;
+    const active = i === currentIdx;
+    const dotClass = done ? 'done' : active ? 'active' : '';
+    const lblClass = done ? 'done' : active ? 'active' : '';
+    const connector = i < STEPS.length - 1
+      ? `<div class="tl-connector ${i < currentIdx ? 'done' : ''}"></div>`
+      : '';
+    let extra = '';
+    if (active && step.key === 'out_for_delivery') {
+      const photoHtml = state.driver_photo
+        ? `<img src="${apiBase}${state.driver_photo}" class="driver-avatar" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`
+        : '';
+      const initials = state.driver_name ? state.driver_name.split(' ').map(w=>w[0]).slice(0,2).join('') : '?';
+      extra = `
+        <div class="driver-info">
+          ${photoHtml}
+          <div class="driver-avatar" style="${state.driver_photo ? 'display:none' : ''}">${initials}</div>
+          <div>
+            <div class="driver-name">${state.driver_name || 'Entregador'}</div>
+            <div class="driver-eta">${state.eta_minutes != null ? `Chega em ~${state.eta_minutes} min` : 'Calculando ETA...'}</div>
+          </div>
+        </div>`;
+    }
+    if (active && step.key === 'delivered') {
+      tl.innerHTML = deliveredHTML(); return;
+    }
+    html += `
+      <div class="tl-item">
+        <div class="tl-line">
+          <div class="tl-dot ${dotClass}"></div>
+          ${connector}
+        </div>
+        <div class="tl-body">
+          <div class="tl-label ${lblClass}">${step.label}</div>
+          ${extra}
+        </div>
+      </div>`;
+  });
+  tl.innerHTML = html;
+}
+
+function deliveredHTML() {
+  return `<div class="delivered-screen">
+    <div class="icon">✅</div>
+    <h2>Pedido entregue!</h2>
+    <p>Obrigado por comprar na Drogarias Max.</p>
+  </div>`;
+}
+
+function showError() {
+  document.getElementById('main-content').innerHTML =
+    '<div style="text-align:center;padding:40px;color:#999"><div style="font-size:48px">📦</div><p style="margin-top:12px">Pedido não encontrado ou link inválido.</p></div>';
+}
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+function renderMap() {
+  if (state.status !== 'out_for_delivery' || state.lat == null) {
+    document.getElementById('map-card').style.display = 'none';
+    return;
+  }
+  document.getElementById('map-card').style.display = 'block';
+  if (!map) {
+    map = L.map('map', { zoomControl: false, attributionControl: false });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    L.control.attribution({ prefix: '© OpenStreetMap' }).addTo(map);
+    const driverIcon = L.divIcon({ html: '🛵', className: '', iconSize: [28,28] });
+    driverMarker = L.marker([state.lat, state.lon], { icon: driverIcon }).addTo(map);
+    if (state.dest_lat) {
+      const destIcon = L.divIcon({ html: '📍', className: '', iconSize: [28,28] });
+      destMarker = L.marker([state.dest_lat, state.dest_lon], { icon: destIcon }).addTo(map);
+    }
+    map.setView([state.lat, state.lon], 15);
+  } else {
+    driverMarker.setLatLng([state.lat, state.lon]);
+    map.panTo([state.lat, state.lon]);
+  }
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connectWS() {
+  ws = new WebSocket(`${wsBase}/ws/order/${orderId}?token=${token}`);
+  ws.onopen = () => {
+    wsReconnectDelay = 1000;
+    setConnStatus(true);
+  };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'location_update') {
+      applyState({ lat: msg.lat, lon: msg.lon, eta_minutes: msg.eta_minutes });
+    } else if (msg.type === 'order_status_changed') {
+      applyState({ status: msg.status, driver_name: msg.driver_name || state.driver_name, driver_photo: msg.driver_photo || state.driver_photo });
+      notify(`Pedido: ${labelFor(msg.status)}`);
+    } else if (msg.type === 'delivery_completed') {
+      applyState({ status: 'delivered' });
+      notify('Seu pedido foi entregue! 🎉');
+    }
+  };
+  ws.onclose = () => {
+    setConnStatus(false);
+    if (state.status !== 'delivered') {
+      setTimeout(connectWS, Math.min(wsReconnectDelay, 30000));
+      wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
+    }
+  };
+}
+
+function setConnStatus(online) {
+  document.getElementById('conn-dot').className = 'conn-dot' + (online ? '' : ' offline');
+  document.getElementById('conn-status').textContent = online ? 'Ao vivo' : 'Reconectando...';
+}
+
+function labelFor(status) {
+  return { confirmed:'Pedido confirmado', preparing:'Em separação', out_for_delivery:'Saiu para entrega', delivered:'Entregue' }[status] || status;
+}
+
+// ── Web Notifications ─────────────────────────────────────────────────────────
+function askNotifPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    document.getElementById('notif-banner').classList.add('show');
+  }
+}
+function requestNotifPermission() {
+  Notification.requestPermission().then(p => {
+    document.getElementById('notif-banner').classList.remove('show');
+  });
+}
+function notify(text) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('Drogarias Max', { body: text, icon: '/favicon.ico' });
+  }
+}
+
+loadInitialState();
+</script>
+</body>
+</html>

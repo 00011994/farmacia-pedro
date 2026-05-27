@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Central de Entregas — Drogarias Max</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#222;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+    /* Top bar */
+    .topbar{background:#0033A0;color:#fff;padding:0 16px;height:48px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:12px}
+    .topbar h1{font-size:15px;font-weight:700;white-space:nowrap}
+    .kpi-row{display:flex;gap:8px;align-items:center}
+    .kpi{font-size:11px;border-radius:10px;padding:3px 9px;font-weight:600}
+    .kpi-green{background:#1a4a1a;color:#4caf50}
+    .kpi-yellow{background:#4a3a0a;color:#ffc107}
+    .kpi-gray{background:#2a2a3a;color:#aaa}
+    .kpi-red{background:#4a1a1a;color:#f87171}
+    .topbar-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
+    .conn-dot{width:7px;height:7px;border-radius:50%;background:#4caf50;display:inline-block}
+    .conn-dot.offline{background:#f87171}
+
+    /* Main layout */
+    .main{display:flex;flex:1;overflow:hidden}
+
+    /* Sidebar */
+    .sidebar{width:310px;flex-shrink:0;background:#fff;border-right:1px solid #e0e0e0;display:flex;flex-direction:column;overflow:hidden}
+    .sidebar-header{padding:10px 12px;background:#f8f9fa;border-bottom:1px solid #e0e0e0;font-size:12px;font-weight:700;color:#555;display:flex;justify-content:space-between;align-items:center}
+    .sidebar-tabs{display:flex;border-bottom:1px solid #e0e0e0}
+    .tab{flex:1;padding:8px 4px;text-align:center;font-size:12px;font-weight:600;cursor:pointer;color:#888;border-bottom:2px solid transparent;transition:all .2s}
+    .tab.active{color:#0033A0;border-bottom-color:#0033A0}
+    .sidebar-body{flex:1;overflow-y:auto}
+
+    /* Driver card */
+    .driver-card{padding:10px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer;transition:background .15s}
+    .driver-card:hover,.driver-card.selected{background:#f0f4ff}
+    .driver-card-header{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+    .driver-photo{width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0}
+    .driver-initials{width:32px;height:32px;border-radius:50%;background:#0033A0;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+    .driver-name{font-size:13px;font-weight:700;flex:1}
+    .status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .dot-available{background:#4caf50}
+    .dot-on_route{background:#2196f3}
+    .dot-paused{background:#ff9800}
+    .dot-offline{background:#9e9e9e}
+    .driver-meta{font-size:11px;color:#888;margin-left:40px}
+    .alert-tag{background:#fff3cd;color:#856404;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:600;margin-left:4px}
+    .alert-tag.danger{background:#f8d7da;color:#721c24}
+
+    /* Orders tab */
+    .order-row{padding:8px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer;transition:background .15s}
+    .order-row:hover{background:#f5f5f5}
+    .order-row h4{font-size:12px;font-weight:700}
+    .order-row p{font-size:11px;color:#888;margin-top:2px}
+
+    /* Bottom panel */
+    .bottom-panel{border-top:1px solid #e0e0e0;padding:10px 12px;background:#f8f9fa;display:flex;flex-direction:column;gap:8px}
+    .panel-title{font-size:11px;font-weight:700;color:#555;letter-spacing:.5px}
+    .assign-row{display:flex;gap:6px;align-items:center}
+    .sel{flex:1;font-size:11px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;background:#fff;outline:none}
+    .coord-row{display:flex;gap:4px}
+    .coord-row input{flex:1;font-size:11px;padding:5px 7px;border:1px solid #ddd;border-radius:6px;background:#fff;outline:none}
+    .btn-assign{background:#0033A0;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
+    .btn-assign:hover{background:#002280}
+    .settings-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .settings-row label{font-size:11px;color:#666}
+    .settings-row input[type=number]{width:60px;font-size:11px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;outline:none}
+    .btn-save{background:#28a745;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer}
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:9999}
+    .modal-overlay.show{display:flex}
+    .modal{background:#fff;border-radius:12px;padding:24px;max-width:400px;width:90%}
+    .modal h3{font-size:15px;font-weight:700;margin-bottom:16px}
+    .modal .field{margin-bottom:12px}
+    .modal .field label{display:block;font-size:11px;font-weight:700;color:#666;margin-bottom:4px}
+    .modal .field input{width:100%;border:1px solid #ddd;border-radius:6px;padding:8px;font-size:13px;outline:none}
+    .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+    .btn-cancel{background:#f0f0f0;border:none;border-radius:6px;padding:8px 14px;font-size:12px;cursor:pointer}
+    .btn-confirm{background:#0033A0;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer}
+
+    /* Map */
+    #map{flex:1;height:100%}
+
+    /* Toast */
+    .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#323232;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9998}
+    .toast.show{opacity:1}
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🗺 Central de Entregas</h1>
+  <div class="kpi-row">
+    <span class="kpi kpi-green" id="kpi-route">0 em rota</span>
+    <span class="kpi kpi-yellow" id="kpi-alert">0 alertas</span>
+    <span class="kpi kpi-gray" id="kpi-avail">0 disponíveis</span>
+  </div>
+  <div class="topbar-right">
+    <button onclick="openNewDriverModal()" style="background:#fff3;border:1px solid #fff5;color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">+ Entregador</button>
+    <span class="conn-dot" id="conn-dot"></span>
+    <span style="font-size:11px" id="conn-label">Conectando...</span>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-tabs">
+      <div class="tab active" id="tab-drivers" onclick="switchTab('drivers')">Entregadores</div>
+      <div class="tab" id="tab-orders" onclick="switchTab('orders')">Pedidos</div>
+    </div>
+    <div class="sidebar-body" id="sidebar-drivers">
+      <div style="text-align:center;padding:20px;color:#aaa;font-size:12px">Carregando...</div>
+    </div>
+    <div class="sidebar-body" id="sidebar-orders" style="display:none">
+      <div style="text-align:center;padding:20px;color:#aaa;font-size:12px">Carregando...</div>
+    </div>
+    <div class="bottom-panel">
+      <div class="panel-title">ATRIBUIR PEDIDO</div>
+      <div class="assign-row">
+        <select class="sel" id="sel-driver"><option value="">Entregador...</option></select>
+        <select class="sel" id="sel-order"><option value="">Pedido...</option></select>
+      </div>
+      <div class="coord-row">
+        <input type="number" id="inp-dest-lat" placeholder="Lat destino" step="0.0001">
+        <input type="number" id="inp-dest-lon" placeholder="Lon destino" step="0.0001">
+      </div>
+      <button class="btn-assign" onclick="assignOrder()">Atribuir</button>
+      <div class="panel-title" style="margin-top:4px">CONFIGURAÇÕES</div>
+      <div class="settings-row">
+        <label>Alerta parado (min):</label>
+        <input type="number" id="inp-alert-min" min="1" max="60" value="5">
+        <label>Vel. média (km/h):</label>
+        <input type="number" id="inp-speed" min="5" max="120" value="30">
+        <button class="btn-save" onclick="saveSettings()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Map -->
+  <div id="map"></div>
+</div>
+
+<!-- New driver modal -->
+<div class="modal-overlay" id="modal-driver">
+  <div class="modal">
+    <h3>Cadastrar Entregador</h3>
+    <div class="field"><label>NOME COMPLETO</label><input type="text" id="new-driver-name" placeholder="João Delivery"></div>
+    <div class="field"><label>PIN (6 dígitos)</label><input type="password" id="new-driver-pin" maxlength="6" placeholder="••••••" inputmode="numeric"></div>
+    <div class="field"><label>FOTO (opcional)</label><input type="file" id="new-driver-photo" accept="image/*"></div>
+    <div id="modal-error" style="color:#dc3545;font-size:12px;display:none;margin-bottom:8px"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-confirm" onclick="createDriver()">Cadastrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const API    = `${location.protocol}//${location.hostname}:8001`;
+const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:8001`;
+const TOKEN  = sessionStorage.getItem('staff_token') || prompt('Token JWT (gestor/funcionário):') || '';
+if (TOKEN) sessionStorage.setItem('staff_token', TOKEN);
+
+const AUTH = { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' };
+
+let map, drivers = {}, markers = {}, wsConnections = {};
+let selectedDriverId = null;
+
+// ── Map init ──────────────────────────────────────────────────────────────────
+map = L.map('map', { zoomControl: true }).setView([-22.9068, -43.1729], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap'
+}).addTo(map);
+
+// ── Load drivers ──────────────────────────────────────────────────────────────
+async function loadDrivers() {
+  try {
+    const res = await fetch(`${API}/api/drivers`, { headers: AUTH });
+    const data = await res.json();
+    drivers = {};
+    data.forEach(d => { drivers[d.id] = d; });
+    renderDriverSidebar();
+    updateKPIs();
+    data.forEach(d => { if (!wsConnections[d.id]) openDriverWS(d.id); });
+    populateDriverSelect(data.filter(d => d.status === 'available'));
+  } catch(e) { console.error('loadDrivers:', e); }
+}
+
+function renderDriverSidebar() {
+  const el = document.getElementById('sidebar-drivers');
+  const sorted = Object.values(drivers).sort((a,b) => {
+    const order = { on_route:0, paused:1, available:2, offline:3 };
+    return (order[a.status]||3) - (order[b.status]||3);
+  });
+  if (!sorted.length) { el.innerHTML = '<div style="text-align:center;padding:20px;color:#aaa;font-size:12px">Nenhum entregador cadastrado</div>'; return; }
+  el.innerHTML = sorted.map(d => {
+    const meta = d._order_id ? `Ped. #${d._order_id}${d._eta != null ? ` · ETA ${d._eta}min` : ''}` : statusLabel(d.status);
+    const alertTag = d._alert ? `<span class="alert-tag ${d._alert === 'stopped' ? '' : 'danger'}">${d._alert === 'stopped' ? '⏸ Parado' : '⚠ Atrasado'}</span>` : '';
+    const photo = d.photo_path
+      ? `<img src="${API}${d.photo_path}" class="driver-photo" onerror="this.style.display='none'">`
+      : `<div class="driver-initials">${initials(d.name)}</div>`;
+    return `<div class="driver-card ${selectedDriverId === d.id ? 'selected' : ''}" onclick="selectDriver(${d.id})">
+      <div class="driver-card-header">
+        ${photo}
+        <span class="driver-name">${d.name}</span>
+        <span class="status-dot dot-${d.status}"></span>
+      </div>
+      <div class="driver-meta">${meta}${alertTag}</div>
+    </div>`;
+  }).join('');
+}
+
+function selectDriver(id) {
+  selectedDriverId = id;
+  renderDriverSidebar();
+  const d = drivers[id];
+  if (d && d._lat) map.setView([d._lat, d._lon], 15);
+}
+
+function statusLabel(s) {
+  return { available:'Disponível', on_route:'Em rota', paused:'Pausado', offline:'Offline' }[s] || s;
+}
+function initials(name) {
+  return name.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+}
+
+function updateKPIs() {
+  const vals = Object.values(drivers);
+  document.getElementById('kpi-route').textContent = `${vals.filter(d=>d.status==='on_route').length} em rota`;
+  document.getElementById('kpi-avail').textContent = `${vals.filter(d=>d.status==='available').length} disponíveis`;
+  const alerts = vals.filter(d=>d._alert).length;
+  document.getElementById('kpi-alert').textContent = `${alerts} alerta${alerts!==1?'s':''}`;
+}
+
+function populateDriverSelect(available) {
+  const sel = document.getElementById('sel-driver');
+  sel.innerHTML = '<option value="">Entregador disponível...</option>' +
+    available.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+}
+
+// ── Load orders (pending) ─────────────────────────────────────────────────────
+async function loadOrders() {
+  try {
+    const res = await fetch(`${API.replace(':8001','')}/api/orders`, { headers: AUTH });
+    if (!res.ok) return;
+    const data = await res.json();
+    const pending = (data.items || data).filter(o => ['pendente','processando','enviado'].includes(o.status));
+    renderOrderSidebar(pending);
+    const sel = document.getElementById('sel-order');
+    sel.innerHTML = '<option value="">Pedido...</option>' +
+      pending.map(o => `<option value="${o.id}">#${o.id} — ${o.customer}</option>`).join('');
+  } catch(e) {}
+}
+
+function renderOrderSidebar(orders) {
+  const el = document.getElementById('sidebar-orders');
+  if (!orders.length) { el.innerHTML = '<div style="padding:20px;color:#aaa;font-size:12px;text-align:center">Nenhum pedido pendente</div>'; return; }
+  el.innerHTML = orders.map(o =>
+    `<div class="order-row">
+      <h4>#${o.id} — ${o.customer}</h4>
+      <p>${o.status} · R$ ${(o.total||0).toFixed(2)}</p>
+    </div>`).join('');
+}
+
+// ── Assign order ──────────────────────────────────────────────────────────────
+async function assignOrder() {
+  const driverId = document.getElementById('sel-driver').value;
+  const orderId  = document.getElementById('sel-order').value;
+  const destLat  = parseFloat(document.getElementById('inp-dest-lat').value);
+  const destLon  = parseFloat(document.getElementById('inp-dest-lon').value);
+  if (!driverId || !orderId) { showToast('Selecione entregador e pedido'); return; }
+  if (isNaN(destLat) || isNaN(destLon)) { showToast('Informe as coordenadas do destino'); return; }
+  try {
+    const res = await fetch(`${API}/api/drivers/${driverId}/assign/${orderId}`, {
+      method: 'POST', headers: AUTH,
+      body: JSON.stringify({ dest_lat: destLat, dest_lon: destLon }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.detail || 'Erro ao atribuir'); return; }
+    showToast(`Pedido #${orderId} atribuído! Token: ${data.tracking_token.slice(0,8)}...`);
+    loadDrivers(); loadOrders();
+  } catch(e) { showToast('Erro de conexão'); }
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+async function loadSettings() {
+  try {
+    const res = await fetch(`${API}/api/settings/delivery`, { headers: AUTH });
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById('inp-alert-min').value = data.stopped_alert_min;
+    document.getElementById('inp-speed').value = data.avg_speed_kmh;
+  } catch(e) {}
+}
+
+async function saveSettings() {
+  const alertMin = parseInt(document.getElementById('inp-alert-min').value);
+  const speed    = parseFloat(document.getElementById('inp-speed').value);
+  if (isNaN(alertMin) || isNaN(speed)) { showToast('Valores inválidos'); return; }
+  try {
+    const res = await fetch(`${API}/api/settings/delivery`, {
+      method: 'PATCH', headers: AUTH,
+      body: JSON.stringify({ avg_speed_kmh: speed, stopped_alert_min: alertMin }),
+    });
+    showToast(res.ok ? 'Configurações salvas' : 'Erro ao salvar');
+  } catch(e) { showToast('Erro de conexão'); }
+}
+
+// ── Create driver modal ───────────────────────────────────────────────────────
+function openNewDriverModal() { document.getElementById('modal-driver').classList.add('show'); }
+function closeModal() { document.getElementById('modal-driver').classList.remove('show'); }
+
+async function createDriver() {
+  const name  = document.getElementById('new-driver-name').value.trim();
+  const pin   = document.getElementById('new-driver-pin').value.trim();
+  const photo = document.getElementById('new-driver-photo').files[0];
+  const errEl = document.getElementById('modal-error');
+  if (!name || pin.length !== 6) { errEl.textContent = 'Nome obrigatório e PIN de 6 dígitos.'; errEl.style.display='block'; return; }
+  const fd = new FormData();
+  fd.append('name', name); fd.append('pin', pin);
+  if (photo) fd.append('photo', photo);
+  try {
+    const res = await fetch(`${API}/api/drivers`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}` },
+      body: fd,
+    });
+    if (res.ok) {
+      closeModal(); errEl.style.display='none';
+      document.getElementById('new-driver-name').value = '';
+      document.getElementById('new-driver-pin').value = '';
+      showToast('Entregador cadastrado');
+      loadDrivers();
+    } else {
+      const data = await res.json();
+      errEl.textContent = data.detail || 'Erro ao cadastrar'; errEl.style.display='block';
+    }
+  } catch(e) { errEl.textContent = 'Erro de conexão'; errEl.style.display='block'; }
+}
+
+// ── WebSocket per driver ──────────────────────────────────────────────────────
+function openDriverWS(driverId) {
+  const ws = new WebSocket(`${WS_URL}/ws/driver/${driverId}?token=${TOKEN}`);
+  wsConnections[driverId] = ws;
+
+  ws.onopen = () => setConnStatus(true);
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    handleDriverMessage(driverId, msg);
+  };
+  ws.onclose = () => {
+    delete wsConnections[driverId];
+    setTimeout(() => { if (drivers[driverId]) openDriverWS(driverId); }, 3000);
+  };
+  ws.onerror = () => setConnStatus(false);
+}
+
+function handleDriverMessage(driverId, msg) {
+  const d = drivers[driverId];
+  if (!d) return;
+
+  if (msg.type === 'location_update') {
+    d._lat = msg.lat; d._lon = msg.lon;
+    d._eta = msg.eta_minutes; d._order_id = msg.order_id;
+    d._alert = null;
+    updateMarker(driverId, msg.lat, msg.lon, d.status);
+    renderDriverSidebar(); updateKPIs();
+  } else if (msg.type === 'driver_stopped_alert') {
+    d._alert = 'stopped';
+    renderDriverSidebar(); updateKPIs();
+    showToast(`⏸ ${d.name} está parado há ${msg.stopped_minutes} min`);
+  } else if (msg.type === 'delivery_completed') {
+    d.status = 'available'; d._order_id = null; d._alert = null; d._eta = null;
+    if (markers[driverId]) { map.removeLayer(markers[driverId]); delete markers[driverId]; }
+    renderDriverSidebar(); updateKPIs();
+    showToast(`✅ ${d.name} completou a entrega #${msg.order_id}`);
+    loadOrders();
+  } else if (msg.type === 'driver_status_changed') {
+    d.status = msg.status;
+    renderDriverSidebar(); updateKPIs();
+  }
+}
+
+function updateMarker(driverId, lat, lon, status) {
+  const color = status === 'on_route' ? '🔵' : status === 'paused' ? '🟡' : '🟢';
+  const icon = L.divIcon({ html: `<span title="${drivers[driverId]?.name}">${color}</span>`, className: '', iconSize: [20,20] });
+  if (markers[driverId]) {
+    markers[driverId].setLatLng([lat, lon]);
+  } else {
+    markers[driverId] = L.marker([lat, lon], { icon }).addTo(map)
+      .bindPopup(`<strong>${drivers[driverId]?.name}</strong>`);
+  }
+  if (selectedDriverId === driverId) map.panTo([lat, lon]);
+}
+
+function setConnStatus(online) {
+  document.getElementById('conn-dot').className = 'conn-dot' + (online ? '' : ' offline');
+  document.getElementById('conn-label').textContent = online ? 'Ao vivo' : 'Reconectando...';
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.getElementById('tab-drivers').classList.toggle('active', tab === 'drivers');
+  document.getElementById('tab-orders').classList.toggle('active', tab === 'orders');
+  document.getElementById('sidebar-drivers').style.display = tab === 'drivers' ? 'block' : 'none';
+  document.getElementById('sidebar-orders').style.display = tab === 'orders' ? 'block' : 'none';
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadDrivers();
+loadOrders();
+loadSettings();
+setInterval(loadDrivers, 30000);
+</script>
+</body>
+</html>

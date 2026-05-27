@@ -8,6 +8,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Seed the demo SQLite database (required before running anything)
 python scripts/seed_demo_db.py
 
+# Seed delivery demo data (run after seed_demo_db.py)
+python scripts/seed_delivery_demo.py
+
+# Delivery server: HTTP REST (port 8001) + WebSocket (port 8001/ws/*)
+python scripts/delivery_server.py
+
 # Run the report generation swarm
 python scripts/run_demo.py
 
@@ -40,7 +46,7 @@ This is a read-only AI swarm for pharmacy ERP operations. The write layer (`exec
 
 ### Data layer
 
-SQLite database at `data/erp_demo.db` (created by `seed_demo_db.py`). Tables: `products`, `sales`, `invoices`, `competitor_prices`, `orders`, `order_items`.
+SQLite database at `data/erp_demo.db` (created by `seed_demo_db.py`). Tables: `products`, `sales`, `invoices`, `competitor_prices`, `orders`, `order_items`, `users`, `customer_orders`, `customers`, `drivers`, `driver_locations`, `delivery_assignments`, `delivery_settings`.
 
 All DB access goes through `src/core/db.py:get_conn()` — a context manager that sets `row_factory = sqlite3.Row`.
 
@@ -100,6 +106,38 @@ All settings are in `src/core/config.py:Settings` (frozen dataclass), loaded fro
 | `INTEGRATION_ADAPTER` | `local` | `local`, `webhook`, or `module:Class` |
 | `WHATSAPP_WEBHOOK_URL` | `` | WhatsApp send is skipped if empty |
 | `OPERATIONAL_SCOPES` | `` | Comma-separated scopes: `stock`, `orders` |
+
+### Delivery system (`src/delivery/` + `scripts/delivery_server.py`)
+
+Logistics layer: driver tracking, order assignment, real-time WebSocket, customer-facing tracking page.
+
+- **`models.py`** — dataclasses: `Driver`, `DriverLocation`, `DeliveryAssignment`, `TrackingState`, `DeliverySettings`
+- **`tracker.py`** — in-memory singleton: latest GPS positions, WebSocket connections per channel, broadcast, stopped-alert detection
+- **`eta.py`** — `haversine()` + `calc_eta()` — straight-line distance + ETA at configurable avg speed
+- **`auth.py`** — PIN hashing (bcrypt direct), driver JWT, tracking token (UUID4), staff token validation
+
+**WebSocket channels** (on port 8001 at `/ws/*`):
+- `ws/driver/{id}?token=<staff_jwt>` — internal admin channel (location, alerts, status)
+- `ws/order/{id}?token=<tracking_token>` — customer tracking channel (position, ETA, status)
+
+**Static frontends:**
+- `out/track/index.html` — customer tracking page (timeline iFood + Leaflet map)
+- `out/driver/index.html` — driver mobile web app (dark, GPS watchPosition)
+- `out/admin/delivery.html` — internal dashboard (Leaflet map + driver sidebar)
+
+**Role permissions:** `gestor` and `funcionario` can assign orders. Only `gestor` can manage drivers and settings.
+
+**New env vars:**
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `DELIVERY_PORT` | `8001` | Delivery server HTTP port (WS on same port) |
+| `DELIVERY_UPLOAD_DIR` | `out/uploads/drivers` | Driver photo upload directory |
+| `JWT_SECRET_KEY` | (hardcoded fallback) | Shared between api_server and delivery_server |
+
+Settings editable at runtime via `PATCH /api/settings/delivery` (gestor only):
+- `avg_speed_kmh` — ETA speed assumption (default 30)
+- `stopped_alert_min` — minutes before stopped-driver alert fires (default 5)
 
 ### Docker
 

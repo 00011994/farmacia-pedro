@@ -6,3 +6,11 @@ __pycache__/
 # demo artifacts
 data/
 out/
+
+# Frontend source files committed despite out/ being ignored
+!out/track/
+!out/track/index.html
+!out/driver/
+!out/driver/index.html
+!out/admin/
+!out/admin/delivery.html
