@@ -1,0 +1,81 @@
+<h2>App do entregador — tela principal (mobile web)</h2>
+<p class="subtitle">O entregador usa pelo smartphone. Qual sensação visual combina melhor com o uso em campo?</p>
+
+<div class="split">
+
+  <div class="mockup" data-choice="dark-action" onclick="toggleSelect(this)" style="cursor:pointer;">
+    <div class="mockup-header">A — Dark / botões grandes (fácil ao sol)</div>
+    <div class="mockup-body" style="background:#1a1a2e;border-radius:8px;padding:12px;color:#fff;font-size:11px;max-width:200px;margin:0 auto;">
+      <!-- Status bar -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div>
+          <div style="font-size:9px;color:#aaa;">Olá,</div>
+          <div style="font-weight:700;font-size:13px;">João Delivery</div>
+        </div>
+        <div style="background:#28a745;border-radius:12px;padding:2px 8px;font-size:9px;">🟢 Disponível</div>
+      </div>
+      <!-- Active delivery card -->
+      <div style="background:#252540;border-radius:8px;padding:10px;margin-bottom:10px;border-left:3px solid #0033A0;">
+        <div style="font-size:9px;color:#aaa;margin-bottom:3px;">ENTREGA ATIVA</div>
+        <div style="font-weight:700;font-size:12px;">Pedido #1042</div>
+        <div style="font-size:9px;color:#aaa;margin-bottom:6px;">Rua das Flores, 123 · 1,2 km</div>
+        <div style="display:flex;gap:4px;">
+          <div style="background:#0a3d62;border-radius:5px;padding:4px 6px;font-size:8px;text-align:center;flex:1;">
+            <div style="font-size:14px;">📍</div>
+            <div>GPS ativo</div>
+          </div>
+          <div style="background:#0a3d62;border-radius:5px;padding:4px 6px;font-size:8px;text-align:center;flex:1;">
+            <div style="font-size:14px;">⏱</div>
+            <div>ETA 8min</div>
+          </div>
+        </div>
+      </div>
+      <!-- Big confirm button -->
+      <button style="width:100%;background:#28a745;color:#fff;border:none;border-radius:8px;padding:12px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:6px;">
+        ✅ CONFIRMAR ENTREGA
+      </button>
+      <button style="width:100%;background:#E30613;color:#fff;border:none;border-radius:8px;padding:8px;font-size:10px;cursor:pointer;">
+        ⏹ Encerrar Rota
+      </button>
+      <div style="text-align:center;margin-top:8px;font-size:8px;color:#555;">GPS enviando a cada 10s</div>
+    </div>
+  </div>
+
+  <div class="mockup" data-choice="light-clean" onclick="toggleSelect(this)" style="cursor:pointer;">
+    <div class="mockup-header">B — Claro / minimalista</div>
+    <div class="mockup-body" style="background:#f8f9fa;border-radius:8px;padding:12px;color:#111;font-size:11px;max-width:200px;margin:0 auto;">
+      <!-- Header -->
+      <div style="background:#0033A0;border-radius:8px;padding:8px 10px;color:#fff;margin-bottom:10px;display:flex;align-items:center;gap:8px;">
+        <div style="width:30px;height:30px;background:#FFD200;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#000;font-weight:700;font-size:11px;">JD</div>
+        <div>
+          <div style="font-weight:700;font-size:11px;">João Delivery</div>
+          <div style="font-size:8px;opacity:.8;">🟢 Em rota · GPS ativo</div>
+        </div>
+      </div>
+      <!-- Delivery info -->
+      <div style="background:#fff;border-radius:8px;padding:10px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+        <div style="font-size:8px;color:#0033A0;font-weight:700;letter-spacing:.5px;margin-bottom:3px;">ENTREGA ATUAL</div>
+        <div style="font-weight:700;font-size:12px;margin-bottom:2px;">Pedido #1042</div>
+        <div style="font-size:9px;color:#666;">Rua das Flores, 123</div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;">
+          <span style="font-size:9px;color:#555;">📍 1,2 km restantes</span>
+          <span style="font-size:9px;color:#555;">⏱ ~8 min</span>
+        </div>
+      </div>
+      <!-- Progress bar -->
+      <div style="background:#e9ecef;border-radius:4px;height:6px;margin-bottom:8px;overflow:hidden;">
+        <div style="background:#0033A0;height:100%;width:65%;border-radius:4px;"></div>
+      </div>
+      <!-- Action buttons -->
+      <button style="width:100%;background:#0033A0;color:#fff;border:none;border-radius:8px;padding:10px;font-size:11px;font-weight:700;cursor:pointer;margin-bottom:5px;">
+        ✅ Confirmar Entrega
+      </button>
+      <button style="width:100%;background:transparent;color:#E30613;border:1px solid #E30613;border-radius:8px;padding:7px;font-size:9px;cursor:pointer;">
+        Encerrar rota
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px;">Ambas incluem o mesmo fluxo: login por PIN → iniciar rota → GPS automático → confirmar entrega</p>
